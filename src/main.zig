@@ -1,19 +1,28 @@
 const std = @import("std");
 
-const bf = @import("bf.zig");
 const Interpreter = @import("interpreter.zig").Interpreter;
+const bf = @import("bf.zig");
+const jit = @import("jit.zig");
 
 pub fn main() !void {
     const code = try std.io.getStdIn().readToEndAlloc(std.heap.page_allocator, 1024 * 1024 * 1024);
 
     var ops = try parse(code);
-    std.debug.print("{}\n", .{ops.items.len});
     compressAddsMoves(&ops);
-    std.debug.print("{}\n", .{ops.items.len});
     try fillJumpLocations(&ops);
 
     var interpreter = Interpreter.init();
     try interpreter.run(try ops.toOwnedSlice());
+
+    var builder = jit.Builder.init();
+    try builder.emit(&[_]u8{
+        0x48, 0x8b, 0x06, // mov rax, [rsi]
+        0xff, 0xd0, // call rax
+        0xc3, // ret
+    });
+    const jit_code = try builder.build();
+    jit_code.run();
+    std.debug.print("done\n", .{});
 }
 
 fn parse(code: []const u8) !std.ArrayList(bf.Op) {
