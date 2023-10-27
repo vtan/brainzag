@@ -7,6 +7,9 @@ pub fn main() !void {
     const code = try std.io.getStdIn().readToEndAlloc(std.heap.page_allocator, 1024 * 1024 * 1024);
 
     var ops = try parse(code);
+    std.debug.print("{}\n", .{ops.items.len});
+    compressAddsMoves(&ops);
+    std.debug.print("{}\n", .{ops.items.len});
     try fillJumpLocations(&ops);
 
     var interpreter = Interpreter.init();
@@ -17,10 +20,10 @@ fn parse(code: []const u8) !std.ArrayList(bf.Op) {
     var ops = std.ArrayList(bf.Op).init(std.heap.page_allocator);
     for (code) |char| {
         const op_opt: ?bf.Op = switch (char) {
-            '+' => bf.Op.inc,
-            '-' => bf.Op.dec,
-            '<' => bf.Op.left,
-            '>' => bf.Op.right,
+            '+' => bf.Op{ .add = 1 },
+            '-' => bf.Op{ .add = -1 },
+            '<' => bf.Op{ .move = -1 },
+            '>' => bf.Op{ .move = 1 },
             '[' => bf.Op{ .jump_if_zero = 0xDEADBEEF },
             ']' => bf.Op{ .jump_back_if_non_zero = 0xDEADBEEF },
             '.' => bf.Op.print,
@@ -49,4 +52,38 @@ fn fillJumpLocations(ops: *std.ArrayList(bf.Op)) !void {
         }
     }
     // TODO: check if jump_stack is empty
+}
+
+fn compressAddsMoves(ops: *std.ArrayList(bf.Op)) void {
+    var i: usize = 1;
+    while (i < ops.items.len) {
+        const curr = ops.items[i];
+        var prev = &ops.items[i - 1];
+        switch (curr) {
+            .add => |a| {
+                switch (prev.*) {
+                    .add => |*b| {
+                        b.* += a;
+                        _ = ops.orderedRemove(i);
+                        continue;
+                    },
+                    else => {},
+                }
+            },
+
+            .move => |a| {
+                switch (prev.*) {
+                    .move => |*b| {
+                        b.* += a;
+                        _ = ops.orderedRemove(i);
+                        continue;
+                    },
+                    else => {},
+                }
+            },
+
+            else => {},
+        }
+        i += 1;
+    }
 }
