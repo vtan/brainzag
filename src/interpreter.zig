@@ -27,7 +27,12 @@ pub const Interpreter = struct {
 
     fn step(self: *Self, op: bf.Op) !void {
         switch (op) {
-            .add => |amount| self.tape[@intCast(self.tape_index)] +%= @intCast(amount & 0xFF),
+            .add => |amount| {
+                var p = &self.tape[@intCast(self.tape_index)];
+                var signed: i8 = @bitCast(p.*);
+                signed +%= amount;
+                p.* = @bitCast(signed);
+            },
 
             .move => |amount| self.tape_index += @intCast(amount),
 
