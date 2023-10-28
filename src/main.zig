@@ -1,4 +1,5 @@
 const std = @import("std");
+const clap = @import("clap");
 
 const Interpreter = @import("interpreter.zig").Interpreter;
 const bf = @import("bf.zig");
@@ -6,90 +7,60 @@ const codegen_x86_64 = @import("codegen_x86_64.zig");
 const jit = @import("jit.zig");
 
 pub fn main() !void {
+    const params = try parseParams() orelse return;
+
     const code = try std.io.getStdIn().readToEndAlloc(std.heap.page_allocator, 1024 * 1024 * 1024);
 
-    var ops = try parse(code);
-    compressAddsMoves(&ops);
-    try fillJumpLocations(&ops);
+    var ops = try bf.parse(code);
 
-    //var interpreter = Interpreter.init();
-    //try interpreter.run(try ops.toOwnedSlice());
+    if (params.optimize) {
+        bf.compressAddsMoves(&ops);
+    }
+    try bf.fillJumpLocations(&ops);
 
-    var builder = jit.Builder.init();
-    try codegen_x86_64.gen(ops.items, &builder);
-    const jit_code = try builder.build();
+    if (params.jit) {
+        var builder = jit.Builder.init();
+        try codegen_x86_64.gen(ops.items, &builder);
 
-    jit_code.run(&bf.global_tape);
+        const jit_code = try builder.build();
+        jit_code.run(&bf.global_tape);
+    } else {
+        var interpreter = Interpreter.init();
+        try interpreter.run(try ops.toOwnedSlice());
+    }
 }
 
-fn parse(code: []const u8) !std.ArrayList(bf.Op) {
-    var ops = std.ArrayList(bf.Op).init(std.heap.page_allocator);
-    for (code) |char| {
-        const op_opt: ?bf.Op = switch (char) {
-            '+' => bf.Op{ .add = 1 },
-            '-' => bf.Op{ .add = -1 },
-            '<' => bf.Op{ .move = -1 },
-            '>' => bf.Op{ .move = 1 },
-            '[' => bf.Op{ .jump_if_zero = 0xDEADBEEF },
-            ']' => bf.Op{ .jump_back_if_non_zero = 0xDEADBEEF },
-            '.' => bf.Op.print,
-            else => null,
+const Params = struct {
+    jit: bool,
+    optimize: bool,
+};
+
+fn parseParams() !?Params {
+    const params = comptime clap.parseParamsComptime(
+        \\-h, --help       Display this help and exit
+        \\-j, --jit        Use JIT compilation instead of the interpreter
+        \\-o, --optimize   Enable optimizations
+    );
+    var diag = clap.Diagnostic{};
+    var res = clap.parse(clap.Help, &params, clap.parsers.default, .{
+        .diagnostic = &diag,
+    }) catch |err| {
+        var stderr = std.io.getStdErr().writer();
+        diag.report(stderr, err) catch {};
+        try stderr.writeAll("Usage: ");
+        try clap.usage(stderr, clap.Help, &params);
+        try stderr.writeAll("\n");
+        return err;
+    };
+    defer res.deinit();
+
+    if (res.args.help != 0) {
+        try clap.help(std.io.getStdErr().writer(), clap.Help, &params, .{});
+        return null;
+    } else {
+        return Params{
+            .jit = res.args.jit != 0,
+            .optimize = res.args.optimize != 0,
         };
-        if (op_opt) |op| {
-            try ops.append(op);
-        }
-    }
-    return ops;
-}
-
-fn fillJumpLocations(ops: *std.ArrayList(bf.Op)) !void {
-    var jump_stack = std.ArrayList(u32).init(std.heap.page_allocator);
-    for (ops.items, 0..) |*op, i| {
-        switch (op.*) {
-            .jump_if_zero => {
-                try jump_stack.append(@intCast(i));
-            },
-            .jump_back_if_non_zero => {
-                const pair_index = jump_stack.pop();
-                ops.items[pair_index].jump_if_zero = @intCast(i);
-                op.*.jump_back_if_non_zero = pair_index;
-            },
-            else => {},
-        }
-    }
-    // TODO: check if jump_stack is empty
-}
-
-fn compressAddsMoves(ops: *std.ArrayList(bf.Op)) void {
-    var i: usize = 1;
-    while (i < ops.items.len) {
-        const curr = ops.items[i];
-        var prev = &ops.items[i - 1];
-        switch (curr) {
-            .add => |a| {
-                switch (prev.*) {
-                    .add => |*b| {
-                        b.* += a;
-                        _ = ops.orderedRemove(i);
-                        continue;
-                    },
-                    else => {},
-                }
-            },
-
-            .move => |a| {
-                switch (prev.*) {
-                    .move => |*b| {
-                        b.* += a;
-                        _ = ops.orderedRemove(i);
-                        continue;
-                    },
-                    else => {},
-                }
-            },
-
-            else => {},
-        }
-        i += 1;
     }
 }
