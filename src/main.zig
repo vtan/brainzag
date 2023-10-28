@@ -2,6 +2,7 @@ const std = @import("std");
 
 const Interpreter = @import("interpreter.zig").Interpreter;
 const bf = @import("bf.zig");
+const codegen_x86_64 = @import("codegen_x86_64.zig");
 const jit = @import("jit.zig");
 
 pub fn main() !void {
@@ -15,11 +16,7 @@ pub fn main() !void {
     try interpreter.run(try ops.toOwnedSlice());
 
     var builder = jit.Builder.init();
-    try builder.emit(&[_]u8{
-        0x48, 0x8b, 0x06, // mov rax, [rsi]
-        0xff, 0xd0, // call rax
-        0xc3, // ret
-    });
+    try codegen_x86_64.gen(ops.items, &builder);
     const jit_code = try builder.build();
     jit_code.run();
     std.debug.print("done\n", .{});
