@@ -9,9 +9,10 @@ const jit = @import("jit.zig");
 pub fn main() !void {
     const params = try parseParams() orelse return;
 
-    const code = try std.io.getStdIn().readToEndAlloc(std.heap.page_allocator, 1024 * 1024 * 1024);
+    const file = try std.fs.cwd().openFile(params.filename, .{});
+    const input = try file.readToEndAlloc(std.heap.page_allocator, 16 * 1024 * 1024);
 
-    var ops = try bf.parse(code);
+    var ops = try bf.parse(input);
 
     if (params.optimize) {
         bf.compressAddsMoves(&ops);
@@ -33,6 +34,11 @@ pub fn main() !void {
 const Params = struct {
     jit: bool,
     optimize: bool,
+    filename: []const u8,
+};
+
+const ParamsError = error{
+    MissingFilename,
 };
 
 fn parseParams() !?Params {
@@ -40,12 +46,16 @@ fn parseParams() !?Params {
         \\-h, --help       Display this help and exit
         \\-j, --jit        Use JIT compilation instead of the interpreter
         \\-o, --optimize   Enable optimizations
+        \\<FILE>
     );
+    const parsers = comptime .{
+        .FILE = clap.parsers.string,
+    };
     var diag = clap.Diagnostic{};
-    var res = clap.parse(clap.Help, &params, clap.parsers.default, .{
+    var stderr = std.io.getStdErr().writer();
+    var res = clap.parse(clap.Help, &params, parsers, .{
         .diagnostic = &diag,
     }) catch |err| {
-        var stderr = std.io.getStdErr().writer();
         diag.report(stderr, err) catch {};
         try stderr.writeAll("Usage: ");
         try clap.usage(stderr, clap.Help, &params);
@@ -57,10 +67,16 @@ fn parseParams() !?Params {
     if (res.args.help != 0) {
         try clap.help(std.io.getStdErr().writer(), clap.Help, &params, .{});
         return null;
+    } else if (res.positionals.len == 0) {
+        try stderr.writeAll("Missing filename\nUsage: ");
+        try clap.usage(stderr, clap.Help, &params);
+        try stderr.writeAll("\n");
+        return ParamsError.MissingFilename;
     } else {
         return Params{
             .jit = res.args.jit != 0,
             .optimize = res.args.optimize != 0,
+            .filename = res.positionals[0],
         };
     }
 }
