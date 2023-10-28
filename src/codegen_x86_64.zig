@@ -1,3 +1,4 @@
+const std = @import("std");
 const bf = @import("bf.zig");
 const jit = @import("jit.zig");
 
@@ -7,11 +8,69 @@ const jit = @import("jit.zig");
 // rsi: function arg 2
 
 pub fn gen(ops: []const bf.Op, builder: *jit.Builder) !void {
-    _ = ops;
     try genPrologue(builder);
 
-    // call [rsi]
-    try builder.emit(&[_]u8{ 0xff, 0x16 });
+    var forward_jump_offsets = std.AutoHashMap(u32, i32).init(std.heap.page_allocator);
+    defer forward_jump_offsets.deinit();
+
+    for (ops, 0..) |op, i| {
+        switch (op) {
+            .add => |amount| {
+                // add byte [rbp], $amount
+                try builder.emit(&[_]u8{ 0x80, 0x45, 0x00, @bitCast(amount) });
+            },
+
+            .move => |amount| {
+                if (amount >= -128 and amount < 127) {
+                    // add rbp, byte $amount
+                    const byte: i8 = @intCast(amount);
+                    try builder.emit(&[_]u8{ 0x48, 0x83, 0xC5, @bitCast(byte) });
+                } else {
+                    unreachable;
+                }
+            },
+
+            .jump_if_zero => {
+                // mov al, [rbp]
+                try builder.emit(&[_]u8{ 0x8a, 0x45, 0x00 });
+                // test al, al
+                try builder.emit(&[_]u8{ 0x84, 0xc0 });
+
+                try forward_jump_offsets.put(
+                    @intCast(i),
+                    @intCast(builder.len()),
+                );
+
+                // jz ...
+                try builder.emit(&[_]u8{ 0x0f, 0x84, 0, 0, 0, 0 });
+            },
+
+            .jump_back_if_non_zero => |dest| {
+                const pair_offset = forward_jump_offsets.get(dest) orelse unreachable;
+
+                // mov al, [rbp]
+                try builder.emit(&[_]u8{ 0x8a, 0x45, 0x00 });
+                // test al, al
+                try builder.emit(&[_]u8{ 0x84, 0xc0 });
+                // jnz pair_offset
+                try builder.emit(&[_]u8{ 0x0f, 0x85 });
+                try builder.emit32((pair_offset + 6) - (@as(i32, @intCast(builder.len())) + 4));
+
+                // fill the offset in the matching jz
+                builder.fill32(
+                    @intCast(pair_offset + 2),
+                    @as(i32, @intCast(builder.len())) - (pair_offset + 6),
+                );
+            },
+
+            .print => {
+                // mov rdi, [rbp]
+                try builder.emit(&[_]u8{ 0x48, 0x8b, 0x7d, 0x00 });
+                // call [rbx]
+                try builder.emit(&[_]u8{ 0xff, 0x13 });
+            },
+        }
+    }
 
     try genEpilogue(builder);
 }

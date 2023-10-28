@@ -12,14 +12,14 @@ pub fn main() !void {
     compressAddsMoves(&ops);
     try fillJumpLocations(&ops);
 
-    var interpreter = Interpreter.init();
-    try interpreter.run(try ops.toOwnedSlice());
+    //var interpreter = Interpreter.init();
+    //try interpreter.run(try ops.toOwnedSlice());
 
     var builder = jit.Builder.init();
     try codegen_x86_64.gen(ops.items, &builder);
     const jit_code = try builder.build();
-    jit_code.run();
-    std.debug.print("done\n", .{});
+
+    jit_code.run(&bf.global_tape);
 }
 
 fn parse(code: []const u8) !std.ArrayList(bf.Op) {

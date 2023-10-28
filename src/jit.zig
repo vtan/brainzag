@@ -1,4 +1,5 @@
 const std = @import("std");
+const bf = @import("bf.zig");
 
 pub const Code = struct {
     const Self = @This();
@@ -26,7 +27,7 @@ pub const Code = struct {
         std.os.munmap(self.mmap_region);
     }
 
-    pub fn run(self: *const Self) void {
+    pub fn run(self: *const Self, tape: []u8) void {
         const Env = packed struct {
             print: *const fn (u8) callconv(.C) void,
         };
@@ -34,8 +35,9 @@ pub const Code = struct {
         var env = Env{ .print = undefined };
         env.print = envPrint;
 
-        const f: *const fn (u64, *const Env) callconv(.C) void = @ptrCast(self.mmap_region.ptr);
-        f(0x42, &env);
+        const f: *const fn (*u8, *const Env) callconv(.C) void = @ptrCast(self.mmap_region.ptr);
+        var tape_pointer = &tape[bf.TAPE_SIZE / 2];
+        f(tape_pointer, &env);
     }
 
     fn envPrint(ch: u8) callconv(.C) void {
@@ -60,6 +62,10 @@ pub const Builder = struct {
         self.deinit();
     }
 
+    pub fn len(self: *const Self) usize {
+        return self.bytes.items.len;
+    }
+
     pub fn emit(self: *Self, bytes: []const u8) !void {
         try self.bytes.appendSlice(bytes);
     }
@@ -68,7 +74,25 @@ pub const Builder = struct {
         try self.bytes.append(x);
     }
 
-    pub fn build(self: *Self) !Code {
+    pub fn emit32(self: *Self, x: i32) !void {
+        const u: u32 = @bitCast(x);
+        try self.bytes.appendSlice(&[_]u8{
+            @truncate(u),
+            @truncate(u >> 8),
+            @truncate(u >> 16),
+            @truncate(u >> 24),
+        });
+    }
+
+    pub fn fill32(self: *Self, offset: usize, x: i32) void {
+        const u: u32 = @bitCast(x);
+        self.bytes.items[offset] = @truncate(u);
+        self.bytes.items[offset + 1] = @truncate(u >> 8);
+        self.bytes.items[offset + 2] = @truncate(u >> 16);
+        self.bytes.items[offset + 3] = @truncate(u >> 24);
+    }
+
+    pub fn build(self: *const Self) !Code {
         return Code.init(self.bytes.items);
     }
 };
