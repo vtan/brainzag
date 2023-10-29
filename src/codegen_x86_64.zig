@@ -63,11 +63,18 @@ pub fn gen(ops: []const bf.Op, builder: *jit.Builder) !void {
                 );
             },
 
-            .print => {
+            .write => {
                 // mov rdi, [rbp]
                 try builder.emit(&[_]u8{ 0x48, 0x8b, 0x7d, 0x00 });
                 // call [rbx]
                 try builder.emit(&[_]u8{ 0xff, 0x13 });
+            },
+
+            .read => {
+                // call [rbx+8]
+                try builder.emit(&[_]u8{ 0xff, 0x53, 0x08 });
+                // mov [rbp], al
+                try builder.emit(&[_]u8{ 0x88, 0x45, 0x00 });
             },
         }
     }

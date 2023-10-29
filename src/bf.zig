@@ -5,7 +5,8 @@ pub const Op = union(enum) {
     move: i32,
     jump_if_zero: u32,
     jump_back_if_non_zero: u32,
-    print: void,
+    write: void,
+    read: void,
 };
 
 pub const TAPE_SIZE = 4 * 1024 * 1024;
@@ -23,7 +24,8 @@ pub fn parse(code: []const u8) !std.ArrayList(Op) {
             '>' => Op{ .move = 1 },
             '[' => Op{ .jump_if_zero = 0xDEADBEEF },
             ']' => Op{ .jump_back_if_non_zero = 0xDEADBEEF },
-            '.' => Op.print,
+            '.' => Op.write,
+            ',' => Op.read,
             else => null,
         };
         if (op_opt) |op| {

@@ -44,9 +44,19 @@ pub const Interpreter = struct {
                 self.op_index = pair_index;
             } else {},
 
-            .print => try std.io.getStdOut().writeAll(
+            .write => try std.io.getStdOut().writeAll(
                 &[1]u8{self.tape[@intCast(self.tape_index)]},
             ),
+
+            .read => {
+                var buf: [1]u8 = undefined;
+                const read_count = try std.io.getStdIn().read(&buf);
+                if (read_count == 0) {
+                    self.tape[@intCast(self.tape_index)] = 0;
+                } else {
+                    self.tape[@intCast(self.tape_index)] = buf[0];
+                }
+            },
         }
     }
 };

@@ -29,21 +29,33 @@ pub const Code = struct {
 
     pub fn run(self: *const Self, tape: []u8) void {
         const Env = packed struct {
-            print: *const fn (u8) callconv(.C) void,
+            write: *const fn (u8) callconv(.C) void,
+            read: *const fn () callconv(.C) u8,
         };
 
-        var env = Env{ .print = undefined };
-        env.print = envPrint;
+        var env = Env{ .write = undefined, .read = undefined };
+        env.write = envWrite;
+        env.read = envRead;
 
         const f: *const fn (*u8, *const Env) callconv(.C) void = @ptrCast(self.mmap_region.ptr);
         var tape_pointer = &tape[bf.TAPE_SIZE / 2];
         f(tape_pointer, &env);
     }
 
-    fn envPrint(ch: u8) callconv(.C) void {
+    fn envWrite(ch: u8) callconv(.C) void {
         std.io.getStdOut().writeAll(
             &[1]u8{ch},
         ) catch unreachable;
+    }
+
+    fn envRead() callconv(.C) u8 {
+        var buf: [1]u8 = undefined;
+        const read_count = std.io.getStdIn().read(&buf) catch return 0;
+        if (read_count == 0) {
+            return 0;
+        } else {
+            return buf[0];
+        }
     }
 };
 
