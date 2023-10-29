@@ -7,18 +7,19 @@ pub const Code = struct {
     mmap_region: []u8,
 
     pub fn init(code: []u8) !Self {
+        // mprotect expects mmap_region.len to be a multiple of the page size
+        const len = (code.len / std.mem.page_size + 1) * std.mem.page_size;
         var mmap_region = try std.os.mmap(
             null,
-            code.len,
-            std.os.PROT.READ | std.os.PROT.WRITE | std.os.PROT.EXEC,
+            len,
+            std.os.PROT.READ | std.os.PROT.WRITE,
             std.os.MAP.ANONYMOUS | std.os.MAP.PRIVATE,
             -1,
             0,
         );
-        @memcpy(mmap_region, code);
+        @memcpy(mmap_region[0..code.len], code);
 
-        // TODO: mprotect expects mmap_region.len to be page-aligned, why?
-        // try std.os.mprotect(mmap_region, std.os.PROT.READ | std.os.PROT.EXEC);
+        try std.os.mprotect(mmap_region, std.os.PROT.READ | std.os.PROT.EXEC);
 
         return Self{ .mmap_region = mmap_region };
     }
