@@ -38,7 +38,7 @@ pub const Code = struct {
         env.write = envWrite;
         env.read = envRead;
 
-        const f: *const fn (*u8, *const Env) callconv(.C) void = @ptrCast(self.mmap_region.ptr);
+        const f: *const fn (*u8, *const Env) callconv(.C) void = @alignCast(@ptrCast(self.mmap_region.ptr));
         var tape_pointer = &tape[bf.TAPE_SIZE / 2];
         f(tape_pointer, &env);
     }

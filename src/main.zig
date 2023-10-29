@@ -1,10 +1,17 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const clap = @import("clap");
 
 const Interpreter = @import("interpreter.zig").Interpreter;
 const bf = @import("bf.zig");
+const codegen_aarch64 = @import("codegen_aarch64.zig");
 const codegen_x86_64 = @import("codegen_x86_64.zig");
 const jit = @import("jit.zig");
+
+const MainError = error{
+    MissingFilename,
+    UnsupportedCpuArch,
+};
 
 pub fn main() !void {
     const params = try parseParams() orelse return;
@@ -21,7 +28,12 @@ pub fn main() !void {
 
     if (params.jit) {
         var builder = jit.Builder.init();
-        try codegen_x86_64.gen(ops.items, &builder);
+
+        switch (builtin.cpu.arch) {
+            std.Target.Cpu.Arch.x86_64 => try codegen_x86_64.gen(ops.items, &builder),
+            std.Target.Cpu.Arch.aarch64 => try codegen_aarch64.gen(ops.items, &builder),
+            else => return MainError.UnsupportedCpuArch,
+        }
 
         const jit_code = try builder.build();
         jit_code.run(&bf.global_tape);
@@ -35,10 +47,6 @@ const Params = struct {
     jit: bool,
     optimize: bool,
     filename: []const u8,
-};
-
-const ParamsError = error{
-    MissingFilename,
 };
 
 fn parseParams() !?Params {
@@ -71,7 +79,7 @@ fn parseParams() !?Params {
         try stderr.writeAll("Missing filename\nUsage: ");
         try clap.usage(stderr, clap.Help, &params);
         try stderr.writeAll("\n");
-        return ParamsError.MissingFilename;
+        return MainError.MissingFilename;
     } else {
         return Params{
             .jit = res.args.jit != 0,
