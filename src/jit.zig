@@ -87,25 +87,25 @@ pub const Builder = struct {
         try self.bytes.append(x);
     }
 
-    pub fn emit32(self: *Self, x: i32) !void {
-        const u: u32 = @bitCast(x);
+    pub fn emit32(self: *Self, x: u32) !void {
         try self.bytes.appendSlice(&[_]u8{
-            @truncate(u),
-            @truncate(u >> 8),
-            @truncate(u >> 16),
-            @truncate(u >> 24),
+            @truncate(x),
+            @truncate(x >> 8),
+            @truncate(x >> 16),
+            @truncate(x >> 24),
         });
     }
 
-    pub fn fill32(self: *Self, offset: usize, x: i32) void {
-        const u: u32 = @bitCast(x);
-        self.bytes.items[offset] = @truncate(u);
-        self.bytes.items[offset + 1] = @truncate(u >> 8);
-        self.bytes.items[offset + 2] = @truncate(u >> 16);
-        self.bytes.items[offset + 3] = @truncate(u >> 24);
+    pub fn fill32(self: *Self, offset: usize, x: u32) void {
+        self.bytes.items[offset] = @truncate(x);
+        self.bytes.items[offset + 1] = @truncate(x >> 8);
+        self.bytes.items[offset + 2] = @truncate(x >> 16);
+        self.bytes.items[offset + 3] = @truncate(x >> 24);
     }
 
     pub fn build(self: *const Self) !Code {
+        var file = try std.fs.cwd().createFile("code", .{});
+        try file.writeAll(self.bytes.items);
         return Code.init(self.bytes.items);
     }
 };

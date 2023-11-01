@@ -54,12 +54,12 @@ pub fn gen(ops: []const bf.Op, builder: *jit.Builder) !void {
                 try builder.emit(&[_]u8{ 0x84, 0xc0 });
                 // jnz pair_offset
                 try builder.emit(&[_]u8{ 0x0f, 0x85 });
-                try builder.emit32((pair_offset + 6) - (@as(i32, @intCast(builder.len())) + 4));
+                try builder.emit32(@bitCast((pair_offset + 6) - (@as(i32, @intCast(builder.len())) + 4)));
 
                 // fill the offset in the matching jz
                 builder.fill32(
                     @intCast(pair_offset + 2),
-                    @as(i32, @intCast(builder.len())) - (pair_offset + 6),
+                    @bitCast(@as(i32, @intCast(builder.len())) - (pair_offset + 6)),
                 );
             },
 
