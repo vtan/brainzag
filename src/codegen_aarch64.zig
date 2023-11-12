@@ -89,7 +89,16 @@ pub fn gen(ops: []const bf.Op, builder: *jit.Builder) !void {
                 try builder.emit32(0xd63f_0020);
             },
 
-            .read => unreachable,
+            .read => {
+                // add x1, x20, 8
+                try builder.emit32(0x9100_2281);
+                // ldur x1, [x1]
+                try builder.emit32(0xf840_0021);
+                // blr x1
+                try builder.emit32(0xd63f_0020);
+                // strb w0, [x19]
+                try builder.emit32(0x3900_0260);
+            },
         }
     }
 
