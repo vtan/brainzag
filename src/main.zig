@@ -35,6 +35,11 @@ pub fn main() !void {
             else => return MainError.UnsupportedCpuArch,
         }
 
+        if (params.dump_code) {
+            var code_file = try std.fs.cwd().createFile("code", .{});
+            try code_file.writeAll(builder.bytes.items);
+        }
+
         const jit_code = try builder.build();
         jit_code.run(&bf.global_tape);
     } else {
@@ -46,6 +51,7 @@ pub fn main() !void {
 const Params = struct {
     jit: bool,
     optimize: bool,
+    dump_code: bool,
     filename: []const u8,
 };
 
@@ -54,6 +60,7 @@ fn parseParams() !?Params {
         \\-h, --help       Display this help and exit
         \\-j, --jit        Use JIT compilation instead of the interpreter
         \\-o, --optimize   Enable optimizations
+        \\-d, --dump-code  Write compiled code to the file `code`
         \\<FILE>
     );
     const parsers = comptime .{
@@ -84,6 +91,7 @@ fn parseParams() !?Params {
         return Params{
             .jit = res.args.jit != 0,
             .optimize = res.args.optimize != 0,
+            .dump_code = res.args.@"dump-code" != 0,
             .filename = res.positionals[0],
         };
     }

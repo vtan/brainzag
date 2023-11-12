@@ -104,8 +104,6 @@ pub const Builder = struct {
     }
 
     pub fn build(self: *const Self) !Code {
-        var file = try std.fs.cwd().createFile("code", .{});
-        try file.writeAll(self.bytes.items);
         return Code.init(self.bytes.items);
     }
 };
