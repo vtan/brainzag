@@ -29,10 +29,15 @@ pub fn gen(ops: []const bf.Op, builder: *jit.Builder) !void {
             },
 
             .move => |amount| {
-                // add x19, x19, amount
-                const signed_imm: i12 = @intCast(amount);
-                const imm: u12 = @bitCast(signed_imm);
-                try builder.emit32(0x9100_0273 | (@as(u32, imm) << 10));
+                if (amount >= 0) {
+                    // add x19, x19, amount
+                    const imm: u12 = @intCast(amount);
+                    try builder.emit32(0x9100_0273 | (@as(u32, imm) << 10));
+                } else {
+                    // sub x19, x19, -amount
+                    const imm: u12 = @intCast(-amount);
+                    try builder.emit32(0xD100_0273 | (@as(u32, imm) << 10));
+                }
             },
 
             .jump_if_zero => {
