@@ -10,10 +10,10 @@ const jit = @import("jit.zig");
 pub fn gen(ops: []const bf.Op, builder: *jit.Builder) !void {
     try genPrologue(builder);
 
-    var forward_jump_offsets = std.AutoHashMap(u32, i32).init(std.heap.page_allocator);
-    defer forward_jump_offsets.deinit();
+    var jump_offsets = std.ArrayList(i32).init(std.heap.page_allocator);
+    defer jump_offsets.deinit();
 
-    for (ops, 0..) |op, i| {
+    for (ops) |op| {
         switch (op) {
             .add => |amount| {
                 // add byte [rbp], $amount
@@ -21,13 +21,9 @@ pub fn gen(ops: []const bf.Op, builder: *jit.Builder) !void {
             },
 
             .move => |amount| {
-                if (amount >= -128 and amount < 127) {
-                    // add rbp, byte $amount
-                    const byte: i8 = @intCast(amount);
-                    try builder.emit(&[_]u8{ 0x48, 0x83, 0xC5, @bitCast(byte) });
-                } else {
-                    unreachable;
-                }
+                // add rbp, byte $amount
+                const byte: i8 = @intCast(amount);
+                try builder.emit(&[_]u8{ 0x48, 0x83, 0xC5, @bitCast(byte) });
             },
 
             .jump_if_zero => {
@@ -36,17 +32,14 @@ pub fn gen(ops: []const bf.Op, builder: *jit.Builder) !void {
                 // test al, al
                 try builder.emit(&[_]u8{ 0x84, 0xc0 });
 
-                try forward_jump_offsets.put(
-                    @intCast(i),
-                    @intCast(builder.len()),
-                );
+                try jump_offsets.append(@intCast(builder.len()));
 
                 // jz ...
                 try builder.emit(&[_]u8{ 0x0f, 0x84, 0, 0, 0, 0 });
             },
 
-            .jump_back_if_non_zero => |dest| {
-                const pair_offset = forward_jump_offsets.get(dest) orelse unreachable;
+            .jump_back_if_non_zero => {
+                const pair_offset = jump_offsets.pop();
 
                 // mov al, [rbp]
                 try builder.emit(&[_]u8{ 0x8a, 0x45, 0x00 });

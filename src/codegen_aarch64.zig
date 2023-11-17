@@ -10,10 +10,10 @@ const jit = @import("jit.zig");
 pub fn gen(ops: []const bf.Op, builder: *jit.Builder) !void {
     try genPrologue(builder);
 
-    var forward_jump_offsets = std.AutoHashMap(u32, i32).init(std.heap.page_allocator);
-    defer forward_jump_offsets.deinit();
+    var jump_offsets = std.ArrayList(i32).init(std.heap.page_allocator);
+    defer jump_offsets.deinit();
 
-    for (ops, 0..) |op, i| {
+    for (ops) |op| {
         switch (op) {
             .add => |amount| {
                 // ldrb w0, [x19]
@@ -47,17 +47,14 @@ pub fn gen(ops: []const bf.Op, builder: *jit.Builder) !void {
                 // ands wzr, w0, w0
                 try builder.emit32(0x6a00_001f);
 
-                try forward_jump_offsets.put(
-                    @intCast(i),
-                    @intCast(builder.len()),
-                );
+                try jump_offsets.append(@intCast(builder.len()));
 
                 // udf, to be filled by the matching jump back
                 try builder.emit32(0x0000_dead);
             },
 
-            .jump_back_if_non_zero => |dest| {
-                const pair_offset = forward_jump_offsets.get(dest) orelse unreachable;
+            .jump_back_if_non_zero => {
+                const pair_offset = jump_offsets.pop();
 
                 // ldrb w0, [x19]
                 try builder.emit32(0x3940_0260);
