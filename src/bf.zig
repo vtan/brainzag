@@ -5,8 +5,8 @@ pub const Op = union(enum) {
     move: i32,
     jump_if_zero: u32,
     jump_back_if_non_zero: u32,
-    write: void,
-    read: void,
+    write,
+    read,
 };
 
 pub const TAPE_SIZE = 4 * 1024 * 1024;

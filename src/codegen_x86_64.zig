@@ -29,8 +29,8 @@ pub fn gen(ops: []const bf.Op, builder: *jit.Builder) !void {
             .jump_if_zero => {
                 // mov al, [rbp]
                 try builder.emit(&[_]u8{ 0x8a, 0x45, 0x00 });
-                // test al, al
-                try builder.emit(&[_]u8{ 0x84, 0xc0 });
+                // cmp al, 0
+                try builder.emit(&[_]u8{ 0x3c, 0x00 });
 
                 try jump_offsets.append(@intCast(builder.len()));
 
@@ -43,16 +43,19 @@ pub fn gen(ops: []const bf.Op, builder: *jit.Builder) !void {
 
                 // mov al, [rbp]
                 try builder.emit(&[_]u8{ 0x8a, 0x45, 0x00 });
-                // test al, al
-                try builder.emit(&[_]u8{ 0x84, 0xc0 });
+                // cmp al, 0
+                try builder.emit(&[_]u8{ 0x3c, 0x00 });
                 // jnz pair_offset
                 try builder.emit(&[_]u8{ 0x0f, 0x85 });
-                try builder.emit32(@bitCast((pair_offset + 6) - (@as(i32, @intCast(builder.len())) + 4)));
+
+                const back_offset = (pair_offset + 6) - (@as(i32, @intCast(builder.len())) + 4);
+                try builder.emit32(@bitCast(back_offset));
 
                 // fill the offset in the matching jz
+                const forward_offset = @as(i32, @intCast(builder.len())) - (pair_offset + 6);
                 builder.fill32(
                     @intCast(pair_offset + 2),
-                    @bitCast(@as(i32, @intCast(builder.len())) - (pair_offset + 6)),
+                    @bitCast(forward_offset),
                 );
             },
 
@@ -91,8 +94,6 @@ fn genEpilogue(builder: *jit.Builder) !void {
     try builder.emit8(0x5b);
     // pop rbp
     try builder.emit8(0x5d);
-    // xor rax, rax
-    try builder.emit(&[_]u8{ 0x48, 0x31, 0xc0 });
     // ret
     try builder.emit8(0xc3);
 }
