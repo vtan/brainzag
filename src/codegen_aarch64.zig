@@ -13,12 +13,12 @@ pub fn gen(ops: []const bf.Op, builder: *jit.Builder) !void {
             .add => |amount| {
                 const amount12: i12 = @intCast(amount);
                 try builder.emit32s(&[_]u32{
-                    // ldrb w0, [x19]
-                    load_reg32_byte(Regs.arg0, Regs.tape_ptr),
-                    // add w0, w0, amount
-                    add32_immediate(Regs.arg0, Regs.arg0, @bitCast(amount12)),
-                    // strb w0, [x19]
-                    store_reg32_byte(Regs.arg0, Regs.tape_ptr),
+                    // ldrb w9, [x19]
+                    load_reg32_byte(Regs.scratch, Regs.tape_ptr),
+                    // add w9, w9, amount
+                    add32_immediate(Regs.scratch, Regs.scratch, @bitCast(amount12)),
+                    // strb w9, [x19]
+                    store_reg32_byte(Regs.scratch, Regs.tape_ptr),
                 });
             },
 
@@ -35,10 +35,10 @@ pub fn gen(ops: []const bf.Op, builder: *jit.Builder) !void {
 
             .jump_if_zero => {
                 try builder.emit32s(&[_]u32{
-                    // ldrb w0, [x19]
-                    load_reg32_byte(Regs.arg0, Regs.tape_ptr),
-                    // ands wzr, w0, w0
-                    and32_flags(Regs.zero, Regs.arg0, Regs.arg0),
+                    // ldrb w9, [x19]
+                    load_reg32_byte(Regs.scratch, Regs.tape_ptr),
+                    // ands wzr, w9, w9
+                    and32_flags(Regs.zero, Regs.scratch, Regs.scratch),
                 });
 
                 try jump_offsets.append(@intCast(builder.len()));
@@ -50,10 +50,10 @@ pub fn gen(ops: []const bf.Op, builder: *jit.Builder) !void {
                 const pair_offset = jump_offsets.pop();
 
                 try builder.emit32s(&[_]u32{
-                    // ldrb w0, [x19]
-                    load_reg32_byte(Regs.arg0, Regs.tape_ptr),
-                    // ands wzr, w0, w0
-                    and32_flags(Regs.zero, Regs.arg0, Regs.arg0),
+                    // ldrb w9, [x19]
+                    load_reg32_byte(Regs.scratch, Regs.tape_ptr),
+                    // ands wzr, w9, w9
+                    and32_flags(Regs.zero, Regs.scratch, Regs.scratch),
                 });
 
                 const relative_offset: i19 =
@@ -77,21 +77,21 @@ pub fn gen(ops: []const bf.Op, builder: *jit.Builder) !void {
                 try builder.emit32s(&[_]u32{
                     // ldrb w0, [x19]
                     load_reg32_byte(Regs.arg0, Regs.tape_ptr),
-                    // ldur x1, [x20]
-                    load_unscaled_reg64(Regs.arg1, Regs.env_ptr),
-                    // blr x1
-                    branch_link_reg(Regs.arg1),
+                    // ldur x9, [x20]
+                    load_unscaled_reg64(Regs.scratch, Regs.env_ptr),
+                    // blr x9
+                    branch_link_reg(Regs.scratch),
                 });
             },
 
             .read => {
                 try builder.emit32s(&[_]u32{
-                    // add x1, x20, 8
-                    add64_immediate(Regs.arg1, Regs.env_ptr, 8),
-                    // ldur x1, [x1]
-                    load_unscaled_reg64(Regs.arg1, Regs.arg1),
-                    // blr x1
-                    branch_link_reg(Regs.arg1),
+                    // add x9, x20, 8
+                    add64_immediate(Regs.scratch, Regs.env_ptr, 8),
+                    // ldur x9, [x9]
+                    load_unscaled_reg64(Regs.scratch, Regs.scratch),
+                    // blr x9
+                    branch_link_reg(Regs.scratch),
                     // strb w0, [x19]
                     store_reg32_byte(Regs.arg0, Regs.tape_ptr),
                 });
@@ -129,6 +129,7 @@ const Reg = u5;
 const Regs = struct {
     pub const arg0: Reg = 0;
     pub const arg1: Reg = 1;
+    pub const scratch: Reg = 9;
     pub const tape_ptr: Reg = 19;
     pub const env_ptr: Reg = 20;
     pub const frame_ptr: Reg = 29;
