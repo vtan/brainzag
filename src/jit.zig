@@ -96,6 +96,12 @@ pub const Builder = struct {
         });
     }
 
+    pub fn emit32s(self: *Self, instrs: []const u32) !void {
+        for (instrs) |instr| {
+            try self.emit32(instr);
+        }
+    }
+
     pub fn fill32(self: *Self, offset: usize, x: u32) void {
         self.bytes.items[offset] = @truncate(x);
         self.bytes.items[offset + 1] = @truncate(x >> 8);
