@@ -77,8 +77,8 @@ pub fn gen(ops: []const bf.Op, builder: *jit.Builder) !void {
                 try builder.emit32s(&[_]u32{
                     // ldrb w0, [x19]
                     load_reg32_byte(Regs.arg0, Regs.tape_ptr),
-                    // ldur x9, [x20]
-                    load_unscaled_reg64(Regs.scratch, Regs.env_ptr),
+                    // ldr x9, [x20]
+                    load_reg64(Regs.scratch, Regs.env_ptr),
                     // blr x9
                     branch_link_reg(Regs.scratch),
                 });
@@ -88,8 +88,8 @@ pub fn gen(ops: []const bf.Op, builder: *jit.Builder) !void {
                 try builder.emit32s(&[_]u32{
                     // add x9, x20, 8
                     add64_immediate(Regs.scratch, Regs.env_ptr, 8),
-                    // ldur x9, [x9]
-                    load_unscaled_reg64(Regs.scratch, Regs.scratch),
+                    // ldr x9, [x9]
+                    load_reg64(Regs.scratch, Regs.scratch),
                     // blr x9
                     branch_link_reg(Regs.scratch),
                     // strb w0, [x19]
@@ -167,8 +167,8 @@ fn load_reg32_byte(dest: Reg, base: Reg) u32 {
     return (0b00111000011_11111_111_010 << 10) | reg_reg(base, dest);
 }
 
-fn load_unscaled_reg64(dest: Reg, base: Reg) u32 {
-    return (0b1111100001 << 22) | imm12_reg_reg(0, base, dest);
+fn load_reg64(dest: Reg, base: Reg) u32 {
+    return (0b11111000_011_11111_111_010 << 10) | reg_reg(base, dest);
 }
 
 fn load_pair64(dest1: Reg, dest2: Reg, base: Reg, offset: i32) u32 {
