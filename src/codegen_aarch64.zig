@@ -104,10 +104,10 @@ pub fn gen(ops: []const bf.Op, builder: *jit.Builder) !void {
 
 pub fn genPrologue(builder: *jit.Builder) !void {
     try builder.emit32s(&[_]u32{
-        // stp x29, x30, [sp, -16]!
-        store_pair64_pre_index(Regs.frame_ptr, Regs.link_reg, Regs.stack_ptr, -16),
-        // mov x29, sp
-        or64(Regs.frame_ptr, Regs.zero, Regs.stack_ptr),
+        // stp x30, xzr, [sp, -16]!
+        store_pair64_pre_index(Regs.link_reg, Regs.zero, Regs.stack_ptr, -16),
+        // stp x19, x20, [sp, -16]!
+        store_pair64_pre_index(Regs.tape_ptr, Regs.env_ptr, Regs.stack_ptr, -16),
         // mov x19, x0
         or64(Regs.tape_ptr, Regs.zero, Regs.arg0),
         // mov x20, x1
@@ -117,8 +117,10 @@ pub fn genPrologue(builder: *jit.Builder) !void {
 
 pub fn genEpilogue(builder: *jit.Builder) !void {
     try builder.emit32s(&[_]u32{
-        // ldp x29, x30, [sp], 16
-        load_pair64(Regs.frame_ptr, Regs.link_reg, Regs.stack_ptr, 16),
+        // ldp x19, x20, [sp], 16
+        load_pair64(Regs.tape_ptr, Regs.env_ptr, Regs.stack_ptr, 16),
+        // ldp x30, xzr, [sp], 16
+        load_pair64(Regs.link_reg, Regs.zero, Regs.stack_ptr, 16),
         // ret
         ret(Regs.link_reg),
     });
@@ -132,7 +134,6 @@ const Regs = struct {
     pub const scratch: Reg = 9;
     pub const tape_ptr: Reg = 19;
     pub const env_ptr: Reg = 20;
-    pub const frame_ptr: Reg = 29;
     pub const link_reg: Reg = 30;
     pub const zero: Reg = 31;
     pub const stack_ptr: Reg = 31;
