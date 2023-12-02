@@ -5,6 +5,7 @@ const clap = @import("clap");
 const Interpreter = @import("interpreter.zig").Interpreter;
 const bf = @import("bf.zig");
 const codegen_aarch64 = @import("codegen_aarch64.zig");
+const codegen_riscv64 = @import("codegen_riscv64.zig");
 const codegen_x86_64 = @import("codegen_x86_64.zig");
 const jit = @import("jit.zig");
 
@@ -32,6 +33,7 @@ pub fn main() !void {
         switch (builtin.cpu.arch) {
             std.Target.Cpu.Arch.x86_64 => try codegen_x86_64.gen(ops.items, &builder),
             std.Target.Cpu.Arch.aarch64 => try codegen_aarch64.gen(ops.items, &builder),
+            std.Target.Cpu.Arch.riscv64 => try codegen_riscv64.gen(ops.items, &builder),
             else => return MainError.UnsupportedCpuArch,
         }
 
