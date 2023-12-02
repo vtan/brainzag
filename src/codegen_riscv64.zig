@@ -12,8 +12,11 @@ pub fn gen(ops: []const bf.Op, builder: *jit.Builder) !void {
         switch (op) {
             .add => |amount| {
                 try builder.emit32s(&[_]u32{
+                    // lbu t0, 0(s0)
                     load(Load.u8, Regs.scratch, Regs.tape_ptr, 0),
+                    // addi t0, t0, amount
                     addi(Regs.scratch, Regs.scratch, @as(i8, @bitCast(amount))),
+                    // sb t0, 0(s0)
                     store(Store.i8, Regs.scratch, Regs.tape_ptr, 0),
                 });
             },
@@ -28,16 +31,25 @@ pub fn gen(ops: []const bf.Op, builder: *jit.Builder) !void {
 
             .write => {
                 try builder.emit32s(&[_]u32{
-                    // lbu a0, s0, 0
+                    // lbu a0, 0(s0)
                     load(Load.u8, Regs.arg0, Regs.tape_ptr, 0),
-                    // ld t0, s1, 0
+                    // ld t0, 0(s1)
                     load(Load.i64, Regs.scratch, Regs.env_ptr, 0),
-                    // jalr ra, s2, 0
+                    // jalr ra, t0, 0
                     jalr(Regs.return_addr, Regs.scratch, 0),
                 });
             },
 
-            .read => {},
+            .read => {
+                try builder.emit32s(&[_]u32{
+                    // ld t0, 8(s1)
+                    load(Load.i64, Regs.scratch, Regs.env_ptr, 8),
+                    // jalr ra, t0, 0
+                    jalr(Regs.return_addr, Regs.scratch, 0),
+                    // sb a0, 0(s0)
+                    store(Store.i8, Regs.arg0, Regs.tape_ptr, 0),
+                });
+            },
         }
     }
 
