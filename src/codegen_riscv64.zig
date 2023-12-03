@@ -22,12 +22,46 @@ pub fn gen(ops: []const bf.Op, builder: *jit.Builder) !void {
             },
 
             .move => |amount| {
-                _ = amount;
+                try builder.emit32s(&[_]u32{
+                    // addi s0, s0, amount
+                    addi(Regs.tape_ptr, Regs.tape_ptr, @intCast(amount)),
+                });
             },
 
-            .jump_if_zero => {},
+            .jump_if_zero => {
+                try builder.emit32(
+                    // lbu t0, 0(s0)
+                    load(Load.u8, Regs.scratch, Regs.tape_ptr, 0),
+                );
+                try jump_offsets.append(@intCast(builder.len()));
+                // to be filled in by the matching jump back
+                try builder.emit32(0);
+            },
 
-            .jump_back_if_non_zero => {},
+            .jump_back_if_non_zero => {
+                const pair_offset = jump_offsets.pop();
+
+                try builder.emit32(
+                    // lbu t0, 0(s0)
+                    load(Load.u8, Regs.scratch, Regs.tape_ptr, 0),
+                );
+
+                const relative_offset: i13 =
+                    @intCast((pair_offset + 4) - (@as(i32, @intCast(builder.len()))));
+                try builder.emit32(
+                    // bne t0, zero, offset
+                    branch(Cond.not_equal, Regs.scratch, Regs.zero, relative_offset),
+                );
+
+                const relative_offset_back: i13 =
+                    @intCast(@as(i32, @intCast(builder.len())) - pair_offset);
+                builder.fill32(
+                    // fill the matching jump:
+                    // beq t0, zero, offset
+                    @intCast(pair_offset),
+                    branch(Cond.equal, Regs.scratch, Regs.zero, relative_offset_back),
+                );
+            },
 
             .write => {
                 try builder.emit32s(&[_]u32{
@@ -127,6 +161,24 @@ fn store(width: Store, src: Reg, base: Reg, offset: i12) u32 {
 
 fn addi(dest: Reg, src: Reg, imm: i12) u32 {
     return encode_i(0b0010011, 0, dest, src, @bitCast(imm));
+}
+
+const Cond = enum(u3) {
+    equal = 0b000,
+    not_equal = 0b001,
+};
+
+fn branch(cond: Cond, reg1: Reg, reg2: Reg, offset: i13) u32 {
+    const offset12: i12 = @intCast(@divExact(offset, 2));
+    const imm: u12 = @bitCast(offset12);
+    return 0b1100011 |
+        (@as(u32, (imm >> 10) & 1) << 7) |
+        (@as(u32, imm & 0b1111) << 8) |
+        (@as(u32, @intFromEnum(cond)) << 12) |
+        (@as(u32, reg1) << 15) |
+        (@as(u32, reg2) << 20) |
+        (@as(u32, (imm >> 4) & 0b111111) << 25) |
+        (@as(u32, imm >> 11) << 31);
 }
 
 fn encode_i(opcode: u7, funct3: u3, rd: Reg, rs1: Reg, imm: u12) u32 {

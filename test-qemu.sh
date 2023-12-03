@@ -3,7 +3,7 @@
 EXECUTABLE='zig-out/bin/brainzag'
 TEST_STDIN='word1 word2 word3'
 
-ARCHS=(x86_64 aarch64)
+ARCHS=(x86_64 aarch64 riscv64)
 FLAGS=(-o -j -jo)
 TESTS=(dollar hello hello2 wc)
 
