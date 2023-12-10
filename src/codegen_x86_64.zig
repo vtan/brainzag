@@ -48,14 +48,14 @@ pub fn gen(ops: []const bf.Op, builder: *jit.Builder) !void {
                 // jnz pair_offset
                 try builder.emit(&[_]u8{ 0x0f, 0x85 });
 
-                const back_offset = (pair_offset + 6) - (@as(i32, @intCast(builder.len())) + 4);
-                try builder.emit32(@bitCast(back_offset));
+                const relative_offset =
+                    (pair_offset + 6) - (@as(i32, @intCast(builder.len())) + 4);
+                try builder.emit32(@bitCast(relative_offset));
 
                 // fill the offset in the matching jz
-                const forward_offset = @as(i32, @intCast(builder.len())) - (pair_offset + 6);
                 builder.fill32(
                     @intCast(pair_offset + 2),
-                    @bitCast(forward_offset),
+                    @bitCast(-relative_offset),
                 );
             },
 

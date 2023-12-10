@@ -63,13 +63,11 @@ pub fn gen(ops: []const bf.Op, builder: *jit.Builder) !void {
                     branch(Cond.not_equal, relative_offset),
                 );
 
-                const relative_offset_back: i19 =
-                    @intCast(@as(i32, @intCast(builder.len())) - pair_offset);
                 builder.fill32(
                     // fill the matching jump:
                     // b.eq $
                     @intCast(pair_offset),
-                    branch(Cond.equal, relative_offset_back),
+                    branch(Cond.equal, -relative_offset),
                 );
             },
 
