@@ -135,6 +135,10 @@ const Regs = struct {
     pub const arg1: Reg = 11;
 };
 
+fn jal(dest: Reg, imm: i21) u32 {
+    return encode_j(0b1101111, dest, imm);
+}
+
 fn jalr(dest: Reg, src: Reg, offset: i12) u32 {
     return encode_i(0b1100111, 0, dest, src, @bitCast(offset));
 }
@@ -167,16 +171,7 @@ const Cond = enum(u3) {
 };
 
 fn branch(cond: Cond, reg1: Reg, reg2: Reg, offset: i13) u32 {
-    const offset12: i12 = @intCast(@divExact(offset, 2));
-    const imm: u12 = @bitCast(offset12);
-    return 0b1100011 |
-        (@as(u32, (imm >> 10) & 1) << 7) |
-        (@as(u32, imm & 0b1111) << 8) |
-        (@as(u32, @intFromEnum(cond)) << 12) |
-        (@as(u32, reg1) << 15) |
-        (@as(u32, reg2) << 20) |
-        (@as(u32, (imm >> 4) & 0b111111) << 25) |
-        (@as(u32, imm >> 11) << 31);
+    return encode_b(0b1100011, @intFromEnum(cond), reg1, reg2, offset);
 }
 
 fn encode_i(opcode: u7, funct3: u3, rd: Reg, rs1: Reg, imm: u12) u32 {
@@ -189,9 +184,41 @@ fn encode_i(opcode: u7, funct3: u3, rd: Reg, rs1: Reg, imm: u12) u32 {
 
 fn encode_s(opcode: u7, funct3: u3, rs1: Reg, rs2: Reg, imm: u12) u32 {
     return @as(u32, opcode) |
-        (@as(u32, imm & 0b11111) << 7) |
+        (bit_slice(imm, 0, 4) << 7) |
         (@as(u32, funct3) << 12) |
         (@as(u32, rs1) << 15) |
         (@as(u32, rs2) << 20) |
-        (@as(u32, imm >> 5) << 25);
+        (bit_slice(imm, 5, 11) << 25);
+}
+
+fn encode_b(opcode: u7, funct3: u3, reg1: Reg, reg2: Reg, imm: i13) u32 {
+    const uimm: u32 = @as(u13, @bitCast(imm));
+    if (uimm & 1 != 0) {
+        unreachable;
+    }
+    return opcode |
+        (bit_slice(uimm, 11, 11) << 7) |
+        (bit_slice(uimm, 1, 4) << 8) |
+        (@as(u32, funct3) << 12) |
+        (@as(u32, reg1) << 15) |
+        (@as(u32, reg2) << 20) |
+        (bit_slice(uimm, 5, 10) << 25) |
+        (bit_slice(uimm, 12, 12) << 31);
+}
+
+fn encode_j(opcode: u7, rd: Reg, imm: i21) u32 {
+    const uimm: u32 = @as(u21, @bitCast(imm));
+    if (uimm & 1 != 0) {
+        unreachable;
+    }
+    return opcode |
+        (@as(u32, rd) << 7) |
+        (bit_slice(uimm, 11, 8) << 12) |
+        (bit_slice(uimm, 10, 1) << 20) |
+        (bit_slice(uimm, 0, 10) << 21) |
+        (bit_slice(uimm, 19, 1) << 31);
+}
+
+fn bit_slice(imm: u32, from: u5, to: u5) u32 {
+    return (imm >> from) & ((@as(u32, 1) << (to - from + 1)) - 1);
 }
