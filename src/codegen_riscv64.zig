@@ -34,8 +34,14 @@ pub fn gen(ops: []const bf.Op, builder: *jit.Builder) !void {
                     load(Load.u8, Regs.scratch, Regs.tape_ptr, 0),
                 );
                 try jump_offsets.append(@intCast(builder.len()));
+
                 // to be filled in by the matching jump back
-                try builder.emit32(0);
+                try builder.emit32s(&[_]u32{
+                    // nop
+                    addi(Regs.zero, Regs.zero, 0),
+                    // nop
+                    addi(Regs.zero, Regs.zero, 0),
+                });
             },
 
             .jump_back_if_non_zero => {
@@ -46,19 +52,49 @@ pub fn gen(ops: []const bf.Op, builder: *jit.Builder) !void {
                     load(Load.u8, Regs.scratch, Regs.tape_ptr, 0),
                 );
 
-                const relative_offset: i13 =
-                    @intCast((pair_offset + 4) - (@as(i32, @intCast(builder.len()))));
-                try builder.emit32(
-                    // bne t0, zero, offset
-                    branch(Cond.not_equal, Regs.scratch, Regs.zero, relative_offset),
-                );
+                const forward_offset32 =
+                    @as(i32, @intCast(builder.len() + 8)) - (pair_offset + 4);
 
-                builder.fill32(
-                    // fill the matching jump:
-                    // beq t0, zero, offset
-                    @intCast(pair_offset),
-                    branch(Cond.equal, Regs.scratch, Regs.zero, -relative_offset),
-                );
+                switch (sizedJumpOffset(forward_offset32)) {
+                    .offset13 => |forward_offset| {
+                        try builder.emit32s(&[_]u32{
+                            // nop
+                            addi(Regs.zero, Regs.zero, 0),
+                            // bne t0, zero, -offset + 8
+                            branch(Cond.not_equal, Regs.scratch, Regs.zero, -forward_offset + 8),
+                        });
+
+                        // fill the matching jump:
+                        // beq t0, zero, offset
+                        builder.fill32(
+                            @intCast(pair_offset + 4),
+                            branch(Cond.equal, Regs.scratch, Regs.zero, forward_offset),
+                        );
+                    },
+
+                    .offset21 => |forward_offset| {
+                        try builder.emit32s(&[_]u32{
+                            // beq t0, zero, +4
+                            branch(Cond.equal, Regs.scratch, Regs.zero, 8),
+                            // jal xzr, -offset + 8
+                            jal(Regs.zero, -forward_offset + 8),
+                        });
+
+                        // fill the matching jump:
+                        // bne t0, zero, +4
+                        builder.fill32(
+                            @intCast(pair_offset),
+                            branch(Cond.not_equal, Regs.scratch, Regs.zero, 8),
+                        );
+                        // jal xzr, -offset
+                        builder.fill32(
+                            @intCast(pair_offset + 4),
+                            jal(Regs.zero, forward_offset),
+                        );
+                    },
+
+                    .tooLarge => unreachable,
+                }
             },
 
             .write => {
@@ -120,6 +156,32 @@ pub fn genEpilogue(builder: *jit.Builder) !void {
         // jalr zero, ra, 0
         jalr(Regs.zero, Regs.return_addr, 0),
     });
+}
+
+const JumpOffset = union(enum) {
+    offset13: i13,
+    offset21: i21,
+    tooLarge,
+};
+
+fn sizedJumpOffset(offset: i32) JumpOffset {
+    if (offset >= 0) {
+        if (offset <= std.math.maxInt(i13)) {
+            return JumpOffset{ .offset13 = @intCast(offset) };
+        } else if (offset <= std.math.maxInt(i21)) {
+            return JumpOffset{ .offset21 = @intCast(offset) };
+        } else {
+            return JumpOffset.tooLarge;
+        }
+    } else {
+        if (offset >= std.math.minInt(i13)) {
+            return JumpOffset{ .offset13 = @intCast(offset) };
+        } else if (offset >= std.math.minInt(i21)) {
+            return JumpOffset{ .offset21 = @intCast(offset) };
+        } else {
+            return JumpOffset.tooLarge;
+        }
+    }
 }
 
 const Reg = u5;
@@ -213,10 +275,10 @@ fn encode_j(opcode: u7, rd: Reg, imm: i21) u32 {
     }
     return opcode |
         (@as(u32, rd) << 7) |
-        (bit_slice(uimm, 11, 8) << 12) |
-        (bit_slice(uimm, 10, 1) << 20) |
-        (bit_slice(uimm, 0, 10) << 21) |
-        (bit_slice(uimm, 19, 1) << 31);
+        (bit_slice(uimm, 12, 19) << 12) |
+        (bit_slice(uimm, 11, 11) << 20) |
+        (bit_slice(uimm, 1, 10) << 21) |
+        (bit_slice(uimm, 20, 20) << 31);
 }
 
 fn bit_slice(imm: u32, from: u5, to: u5) u32 {
