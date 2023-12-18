@@ -4,16 +4,14 @@ const bf = @import("bf.zig");
 pub const Interpreter = struct {
     const Self = @This();
 
-    const TAPE_SIZE: usize = 65_536;
-
-    tape: [TAPE_SIZE]u8,
+    tape: []u8,
     tape_index: isize,
     op_index: isize,
 
     pub fn init() Self {
         return Self{
-            .tape = std.mem.zeroes([TAPE_SIZE]u8),
-            .tape_index = TAPE_SIZE / 2,
+            .tape = &bf.global_tape,
+            .tape_index = bf.TAPE_SIZE / 2,
             .op_index = 0,
         };
     }
